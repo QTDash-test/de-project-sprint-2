@@ -13,7 +13,6 @@ insert into public.shipping_country_rates (shipping_country, shipping_country_ba
 	from public.shipping;
 --- select * from public.shipping_country_rates limit 10
 
-
 --- public.shipping_agreement
 create table if not exists public.shipping_agreement
 	(agreementid 				integer,
@@ -33,7 +32,6 @@ insert into public.shipping_agreement (agreementid, agreement_number, agreement_
 		from public.shipping)t;
 --- select * from public.shipping_agreement limit 10
 
-
 --- public.shipping_transfer
 create table if not exists public.shipping_transfer
 	(transfer_type_id 			serial,
@@ -52,7 +50,6 @@ insert into public.shipping_transfer (transfer_type, transfer_model, shipping_tr
 				shipping_transfer_rate
 		from public.shipping)t;
 --- select * from public.shipping_transfer limit 10
-
 
 --- public.shipping_info
 create table if not exists public.shipping_info
@@ -76,17 +73,14 @@ insert into public.shipping_info
 		sh.shipping_plan_datetime,
 		st.transfer_type_id,
 		sct.shipping_country_id,
-		sa.agreementid
+		(regexp_split_to_array(sh.vendor_agreement_description, ':+'))[1]::int as agreementid
 	from public.shipping sh
 	left join public.shipping_transfer st
 		on st.transfer_type = (regexp_split_to_array(sh.shipping_transfer_description, ':+'))[1]::text
 			and st.transfer_model = (regexp_split_to_array(sh.shipping_transfer_description, ':+'))[2]::text
 	left join public.shipping_country_rates sct
-		on sct.shipping_country = sh.shipping_country
-	left join public.shipping_agreement sa
-		on sa.agreementid::text = (regexp_split_to_array(sh.vendor_agreement_description, ':+'))[1];
+		on sct.shipping_country = sh.shipping_country;
 --- select * from public.shipping_info  limit 10
-
 
 --- shipping_status
 create table if not exists public.shipping_status
@@ -100,7 +94,7 @@ create table if not exists public.shipping_status
 insert into public.shipping_status (shippingid, status, state, shipping_start_fact_datetime, shipping_end_fact_datetime)
 	with md as (select
 			shippingid,
-			max(case when state = 'booked' then state_datetime else null end) as max_start,
+			min(case when state = 'booked' then state_datetime else null end) as max_start,
 			max(case when state = 'recieved' then state_datetime else null end) as max_end
 		from public.shipping
 		group by shippingid)
@@ -120,16 +114,18 @@ insert into public.shipping_status (shippingid, status, state, shipping_start_fa
 	join md on md.shippingid=t.shippingid;
 --- select * from shipping_status limit 10
 
-
 --- shipping_datamart
-
 create view public.shipping_datamart as
 	select
 		si.shippingid,
 		si.vendorid,
 		st.transfer_type,
 		(ss.shipping_end_fact_datetime::date - ss.shipping_start_fact_datetime::date) as full_day_at_shipping,
-		case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then 1 else 0 end as is_delay,
+		case
+			when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then '1'
+			when ss.shipping_end_fact_datetime is null then '-'
+			else '0'
+		end as is_delay,
 		case when ss.status = 'finished' then 1 else 0 end as is_shipping_finish,
 		case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then ss.shipping_end_fact_datetime::date - si.shipping_plan_datetime::date else 0 end as delay_day_at_shipping,
 		si.payment_amount,
