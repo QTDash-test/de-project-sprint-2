@@ -122,9 +122,9 @@ create view public.shipping_datamart as
 		st.transfer_type,
 		(ss.shipping_end_fact_datetime::date - ss.shipping_start_fact_datetime::date) as full_day_at_shipping,
 		case
-			when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then '1'
-			when ss.shipping_end_fact_datetime is null then '-'
-			else '0'
+			when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then 1
+			when ss.shipping_end_fact_datetime is null then Null
+			else 0
 		end as is_delay,
 		case when ss.status = 'finished' then 1 else 0 end as is_shipping_finish,
 		case when ss.shipping_end_fact_datetime > si.shipping_plan_datetime then ss.shipping_end_fact_datetime::date - si.shipping_plan_datetime::date else 0 end as delay_day_at_shipping,
